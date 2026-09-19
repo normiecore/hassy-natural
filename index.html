@@ -47,7 +47,7 @@ input[type=file]{display:none}.toast{position:fixed;z-index:50;left:50%;bottom:c
 <div class="toast" id="toast"></div><div class="flash" id="flash"></div>
 <script>
 const q=id=>document.getElementById(id);
-const S={stream:null,rear:[],activeDevice:null,items:[],active:0,intensity:100,original:false};
+const S={stream:null,cameras:[],activeDevice:null,items:[],active:0,intensity:100,original:false};
 const video=q('video'),status=q('status'),statusText=q('statusText'),lenses=q('lenses'),editor=q('editor'),canvas=q('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),strip=q('strip'),toast=q('toast');
 const clamp=x=>Math.max(0,Math.min(1,x)),smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)};
 const lin=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)},srgb=v=>{v=clamp(v);return(v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055)*255};
@@ -55,7 +55,7 @@ function natural(r8,g8,b8,k){let r=lin(r8),g=lin(g8),b=lin(b8),or=r,og=g,ob=b;le
 function process(d,k){for(let i=0;i<d.data.length;i+=4){let p=natural(d.data[i],d.data[i+1],d.data[i+2],k);d.data[i]=p[0];d.data[i+1]=p[1];d.data[i+2]=p[2]}return d}
 function msg(t){toast.textContent=t;toast.classList.add('show');clearTimeout(msg.t);msg.t=setTimeout(()=>toast.classList.remove('show'),1500)}
 function stop(){if(S.stream)S.stream.getTracks().forEach(t=>t.stop());S.stream=null}
-function classify(label){let s=(label||'').toLowerCase();if(/ultra|0\.5|0,5/.test(s))return{rank:0,name:'.5×'};if(/tele|4x|4×|100mm/.test(s))return{rank:2,name:'4×'};if(/wide|back|rear/.test(s)&&!/ultra/.test(s))return{rank:1,name:'1×'};return null}
+function classify(label){let s=(label||'').toLowerCase();let front=/(front|user|facetime|true.?depth)/.test(s);if(front)return{kind:'front',rank:99,name:'Front'};let rear=/(back|rear|environment|wide|ultra|tele|13mm|24mm|100mm)/.test(s);if(!rear)return null;if(/ultra|0\.5|0,5|13mm/.test(s))return{kind:'rear',rank:0,name:'.5×'};if(/tele|4x|4×|100mm/.test(s))return{kind:'rear',rank:2,name:'4×'};return{kind:'rear',rank:1,name:'1×'}}
 async function startCamera(deviceId){
   stop();
   try{
@@ -65,9 +65,10 @@ async function startCamera(deviceId){
 }
 async function discover(){
   try{
-    let ds=await navigator.mediaDevices.enumerateDevices(),cams=ds.filter(d=>d.kind==='videoinput'),rear=cams.map(d=>({d,c:classify(d.label)})).filter(x=>x.c).sort((a,b)=>a.c.rank-b.c.rank);
-    let unique=[];for(let x of rear){if(!unique.some(u=>u.c.name===x.c.name))unique.push(x)}
-    if(unique.length){S.rear=unique;lenses.innerHTML='';unique.forEach(x=>{let b=document.createElement('button');b.className='lens'+(x.d.deviceId===S.activeDevice?' active':'');b.textContent=x.c.name;b.onclick=()=>startCamera(x.d.deviceId);lenses.appendChild(b)});if(!lenses.querySelector('.active')){let one=[...lenses.children].find(b=>b.textContent==='1×')||lenses.children[0];one&&one.classList.add('active')}}
+    let ds=await navigator.mediaDevices.enumerateDevices(),cams=ds.filter(d=>d.kind==='videoinput').map(d=>({d,c:classify(d.label)})).filter(x=>x.c);
+    let rear=cams.filter(x=>x.c.kind==='rear').sort((a,b)=>a.c.rank-b.c.rank),front=cams.find(x=>x.c.kind==='front');
+    let unique=[];for(let x of rear){if(!unique.some(u=>u.c.name===x.c.name))unique.push(x)}if(front)unique.push(front);
+    if(unique.length){S.cameras=unique;lenses.innerHTML='';unique.forEach(x=>{let b=document.createElement('button');b.className='lens'+(x.d.deviceId===S.activeDevice?' active':'');b.textContent=x.c.name;b.onclick=()=>startCamera(x.d.deviceId);lenses.appendChild(b)});if(!lenses.querySelector('.active')){let one=[...lenses.children].find(b=>b.textContent==='1×')||lenses.children[0];one&&one.classList.add('active')}}
   }catch(e){}
 }
 q('enable').onclick=()=>startCamera();addEventListener('load',()=>startCamera());
