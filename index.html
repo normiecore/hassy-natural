@@ -51,7 +51,24 @@ const S={stream:null,cameras:[],activeDevice:null,items:[],active:0,intensity:10
 const video=q('video'),status=q('status'),statusText=q('statusText'),lenses=q('lenses'),editor=q('editor'),canvas=q('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),strip=q('strip'),toast=q('toast');
 const clamp=x=>Math.max(0,Math.min(1,x)),smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)};
 const lin=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)},srgb=v=>{v=clamp(v);return(v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055)*255};
-function natural(r8,g8,b8,k){let r=lin(r8),g=lin(g8),b=lin(b8),or=r,og=g,ob=b;let nr=1.018*r+.004*g-.010*b,ng=-.006*r+1.010*g-.002*b,nb=-.004*r+.006*g+.985*b;r=nr;g=ng;b=nb;let y=.2126*r+.7152*g+.0722*b,toe=y<.18?y*(.985+.07*(.18-y)/.18):y,sh=toe>.58?.58+(toe-.58)/(1+.72*(toe-.58)):toe,y2=clamp(sh*1.015+.003),sc=y>1e-5?y2/y:1;r*=sc;g*=sc;b*=sc;y=.2126*r+.7152*g+.0722*b;let cr=r-y,cg=g-y,cb=b-y,ch=Math.sqrt(cr*cr+cg*cg+cb*cb),hi=smooth(.55,.95,y),sat=(.985-.10*hi)/(1+.32*Math.max(0,ch-.18));r=y+cr*sat;g=y+cg*sat;b=y+cb*sat;let gd=clamp((g-Math.max(r,b))*3);g-=.012*gd;r+=.004*gd;let bd=clamp((b-Math.max(r,g))*2.7);b-=.010*bd;r+=.003*bd;let mid=Math.exp(-Math.pow((y-.42)/.28,2));r+=.006*mid;b-=.0035*mid;r=or+(r-or)*k;g=og+(g-og)*k;b=ob+(b-ob)*k;return[srgb(r),srgb(g),srgb(b)]}
+function natural(r8,g8,b8,k){let r=lin(r8),g=lin(g8),b=lin(b8),or=r,og=g,ob=b;
+/* Natural v2: restrained X2D II-inspired SDR rendering. Less global colour push,
+   gentler shadows, smoother shoulder, and more differentiated foliage. */
+let nr=1.010*r+.003*g-.006*b,ng=-.003*r+1.006*g-.001*b,nb=-.002*r+.003*g+.992*b;r=nr;g=ng;b=nb;
+let y=.2126*r+.7152*g+.0722*b;
+/* keep deep shadows open instead of crushing dusk foliage; compress highlights progressively */
+let shadow=smooth(.015,.20,y),lift=(1-shadow)*.010*(1-y),base=y+lift;
+let sh=base>.60?.60+(base-.60)/(1+.58*(base-.60)):base,y2=clamp(sh*1.008+.002),sc=y>1e-5?y2/y:1;r*=sc;g*=sc;b*=sc;
+y=.2126*r+.7152*g+.0722*b;let cr=r-y,cg=g-y,cb=b-y,ch=Math.sqrt(cr*cr+cg*cg+cb*cb),hi=smooth(.62,.98,y);
+/* X2D II JPEGs are comparatively restrained: avoid phone-like chroma in highlights */
+let sat=(.972-.075*hi)/(1+.22*Math.max(0,ch-.16));r=y+cr*sat;g=y+cg*sat;b=y+cb*sat;
+/* foliage: reduce yellow/neon bias without making every green the same */
+let greenLead=clamp((g-Math.max(r,b))*3.2),yellowGreen=greenLead*clamp((r-b+.03)*2.0);
+g-=.007*greenLead+.006*yellowGreen;r-=.002*yellowGreen;b+=.003*greenLead;
+/* skies: retain blue rather than pushing cyan; tiny warm bias only through midtones */
+let blueLead=clamp((b-Math.max(r,g))*2.5);b-=.004*blueLead;r+=.0015*blueLead;
+let mid=Math.exp(-Math.pow((y-.43)/.30,2));r+=.0032*mid;b-=.0018*mid;
+r=or+(r-or)*k;g=og+(g-og)*k;b=ob+(b-ob)*k;return[srgb(r),srgb(g),srgb(b)]}
 function process(d,k){for(let i=0;i<d.data.length;i+=4){let p=natural(d.data[i],d.data[i+1],d.data[i+2],k);d.data[i]=p[0];d.data[i+1]=p[1];d.data[i+2]=p[2]}return d}
 function msg(t){toast.textContent=t;toast.classList.add('show');clearTimeout(msg.t);msg.t=setTimeout(()=>toast.classList.remove('show'),1500)}
 function stop(){if(S.stream)S.stream.getTracks().forEach(t=>t.stop());S.stream=null}
