@@ -28,7 +28,7 @@ input[type=file]{display:none}.toast{position:fixed;z-index:50;left:50%;bottom:c
 <body>
 <section class="cameraScreen">
 <div class="viewfinder"><video id="video" autoplay muted playsinline></video></div>
-<div class="topbar"><div class="brand">HASSY <span style="font-size:9px;letter-spacing:.08em;opacity:.5;font-weight:600">v0.2.1</span></div><div class="mode">NATURAL</div></div>
+<div class="topbar"><div class="brand">HASSY <span style="font-size:9px;letter-spacing:.08em;opacity:.5;font-weight:600">v0.2.2</span></div><div class="mode">NATURAL</div></div>
 <div class="lenses" id="lenses"><button class="lens active" data-role="fallback">1×</button></div>
 <div class="controls">
 <label class="libraryBtn" for="library" aria-label="Import photos">▦</label>
@@ -57,14 +57,18 @@ function natural(r8,g8,b8,k){let r=lin(r8),g=lin(g8),b=lin(b8),or=r,og=g,ob=b;
 let nr=1.010*r+.003*g-.006*b,ng=-.003*r+1.006*g-.001*b,nb=-.002*r+.003*g+.992*b;r=nr;g=ng;b=nb;
 let y=.2126*r+.7152*g+.0722*b;
 /* keep deep shadows open instead of crushing dusk foliage; compress highlights progressively */
-let shadow=smooth(.015,.20,y),lift=(1-shadow)*.010*(1-y),base=y+lift;
-let sh=base>.60?.60+(base-.60)/(1+.58*(base-.60)):base,y2=clamp(sh*1.008+.002),sc=y>1e-5?y2/y:1;r*=sc;g*=sc;b*=sc;
+let shadow=smooth(.012,.18,y),lift=(1-shadow)*.004*(1-y),base=y+lift;
+/* v0.2.2: restore midtone density after v0.2.1's artifact fix. Keep the
+   shoulder smooth, but stop lifting the whole image into a washed-out look. */
+let sh=base>.64?.64+(base-.64)/(1+.42*(base-.64)):base;
+let density=1-.018*Math.exp(-Math.pow((base-.42)/.28,2));
+let y2=clamp(sh*density),sc=y>1e-5?y2/y:1;r*=sc;g*=sc;b*=sc;
 y=.2126*r+.7152*g+.0722*b;let cr=r-y,cg=g-y,cb=b-y,ch=Math.sqrt(cr*cr+cg*cg+cb*cb),hi=smooth(.62,.98,y);
 /* X2D II JPEGs are comparatively restrained: avoid phone-like chroma in highlights */
-let sat=(.972-.075*hi)/(1+.22*Math.max(0,ch-.16));r=y+cr*sat;g=y+cg*sat;b=y+cb*sat;
+let sat=(.988-.060*hi)/(1+.18*Math.max(0,ch-.16));r=y+cr*sat;g=y+cg*sat;b=y+cb*sat;
 /* foliage: reduce yellow/neon bias without making every green the same */
 let greenLead=clamp((g-Math.max(r,b))*3.2),yellowGreen=greenLead*clamp((r-b+.03)*2.0);
-g-=.007*greenLead+.006*yellowGreen;r-=.002*yellowGreen;b+=.003*greenLead;
+g-=.005*greenLead+.004*yellowGreen;r-=.0015*yellowGreen;b+=.002*greenLead;
 /* skies: retain blue rather than pushing cyan; tiny warm bias only through midtones */
 let blueLead=clamp((b-Math.max(r,g))*2.5);b-=.004*blueLead;r+=.0015*blueLead;
 let mid=Math.exp(-Math.pow((y-.43)/.30,2));r+=.0032*mid;b-=.0018*mid;
