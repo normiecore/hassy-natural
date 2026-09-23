@@ -28,7 +28,7 @@ input[type=file]{display:none}.toast{position:fixed;z-index:50;left:50%;bottom:c
 <body>
 <section class="cameraScreen">
 <div class="viewfinder"><video id="video" autoplay muted playsinline></video></div>
-<div class="topbar"><div class="brand">HASSY <span style="font-size:9px;letter-spacing:.08em;opacity:.5;font-weight:600">v0.2.0</span></div><div class="mode">NATURAL</div></div>
+<div class="topbar"><div class="brand">HASSY <span style="font-size:9px;letter-spacing:.08em;opacity:.5;font-weight:600">v0.2.1</span></div><div class="mode">NATURAL</div></div>
 <div class="lenses" id="lenses"><button class="lens active" data-role="fallback">1×</button></div>
 <div class="controls">
 <label class="libraryBtn" for="library" aria-label="Import photos">▦</label>
@@ -68,7 +68,12 @@ g-=.007*greenLead+.006*yellowGreen;r-=.002*yellowGreen;b+=.003*greenLead;
 /* skies: retain blue rather than pushing cyan; tiny warm bias only through midtones */
 let blueLead=clamp((b-Math.max(r,g))*2.5);b-=.004*blueLead;r+=.0015*blueLead;
 let mid=Math.exp(-Math.pow((y-.43)/.30,2));r+=.0032*mid;b-=.0018*mid;
-r=or+(r-or)*k;g=og+(g-og)*k;b=ob+(b-ob)*k;return[srgb(r),srgb(g),srgb(b)]}
+/* gamut safety: v0.2.0 could drive near-black channels negative, which
+   sRGB encoding turned into blue/magenta/black edge artifacts. Preserve hue by
+   shifting the triplet into gamut before the final blend, then hard-bound output. */
+let mn=Math.min(r,g,b);if(mn<0){r-=mn;g-=mn;b-=mn}
+let mx=Math.max(r,g,b);if(mx>1){let yy=.2126*r+.7152*g+.0722*b,den=mx-yy;if(den>1e-6){let t=(1-yy)/den;r=yy+(r-yy)*t;g=yy+(g-yy)*t;b=yy+(b-yy)*t}}
+r=clamp(or+(r-or)*k);g=clamp(og+(g-og)*k);b=clamp(ob+(b-ob)*k);return[srgb(r),srgb(g),srgb(b)]}
 function process(d,k){for(let i=0;i<d.data.length;i+=4){let p=natural(d.data[i],d.data[i+1],d.data[i+2],k);d.data[i]=p[0];d.data[i+1]=p[1];d.data[i+2]=p[2]}return d}
 function msg(t){toast.textContent=t;toast.classList.add('show');clearTimeout(msg.t);msg.t=setTimeout(()=>toast.classList.remove('show'),1500)}
 function stop(){if(S.stream)S.stream.getTracks().forEach(t=>t.stop());S.stream=null}
